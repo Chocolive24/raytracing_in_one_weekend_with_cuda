@@ -7,10 +7,18 @@
 
 using Color = Vec3F;
 
+inline double LinearToGamma(float linear_component) {
+  if (linear_component > 0.f) 
+	  return std::sqrt(linear_component);
+
+  return 0;
+}
+
 inline void write_color(std::ostream& out, const Color& pixel_color) {
-  const auto r = pixel_color.x;
-  const auto g = pixel_color.y;
-  const auto b = pixel_color.z;
+  // Apply a linear to gamma transform for gamma 2
+  const auto r = LinearToGamma(pixel_color.x);
+  const auto g = LinearToGamma(pixel_color.y);
+  const auto b = LinearToGamma(pixel_color.z);
 
   // Translate the [0,1] component values to the byte range [0,255].
   static constexpr IntervalF intensity(0.000f, 0.999f);

@@ -14,25 +14,26 @@ static constexpr float kEpsilon = 0.001f;
 
 // Utility Functions
 template<typename T>
-[[nodiscard]] constexpr T DegreesToRadians(const T& degrees) noexcept {
+__host__ __device__ [[nodiscard]] constexpr T DegreesToRadians(const T& degrees) noexcept {
   return degrees * kPi / 180.f;
 }
 
-template <typename T>
-[[nodiscard]] T SchlickApproxReflectance(const T& cosine, const T& refraction_index) noexcept {
-  auto r0 = (1 - refraction_index) / (1 + refraction_index);
+__host__ __device__ [[nodiscard]] inline float SchlickApproxReflectance(
+    const float cosine, const float refraction_index) noexcept {
+  auto r0 = (1.0f - refraction_index) / (1.0f + refraction_index);
   r0 = r0 * r0;
-  return r0 + (1 - r0) * std::pow((1 - cosine), 5);
+  return r0 + (1.0f - r0) * std::pow((1.0f - cosine), 5.0f);
 }
 
 template <typename T>
-[[nodiscard]] T GetRandomDouble() noexcept {
+__host__ __device__ [[nodiscard]] T GetRandomDouble() noexcept {
   // Returns a random real in [0,1).
   return rand() / (RAND_MAX + 1.0);
 }
 
 template<typename T>
-[[nodiscard]] T GetRandomDoubleInRange(const T& min, const T& max) {
+__host__ __device__ [[nodiscard]] T GetRandomDoubleInRange(const T& min,
+                                                           const T& max) {
   // Returns a random real in [min,max).
   return min + (max - min) * GetRandomDouble<T>();
 }

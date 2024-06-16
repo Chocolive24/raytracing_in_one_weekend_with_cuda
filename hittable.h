@@ -9,7 +9,7 @@ class HitResult {
  public:
   Vec3F point{};
   Vec3F normal{};
-  //std::shared_ptr<Material> material = nullptr;
+  Material* material = nullptr;
   float t = 0;
   bool has_hit = false;
   bool front_face;
@@ -42,8 +42,8 @@ class Hittable {
 class Sphere final : public Hittable {
  public:
   __device__ constexpr Sphere() noexcept = default;
-  __device__ Sphere(const Vec3F& center, const float radius) noexcept
-      : center_(center), radius_(radius) {}
+  __device__ Sphere(const Vec3F& center, const float radius, Material* material) noexcept
+      : center_(center), radius_(radius), material(material) {}
 
    __device__ [[nodiscard]] HitResult DetectHit(
       const RayF& r, const IntervalF& ray_interval) const noexcept override
@@ -62,7 +62,7 @@ class Sphere final : public Hittable {
         return hit_result;
       }
 
-      const auto sqrt_d = std::sqrt(discriminant);
+      const auto sqrt_d = sqrt(discriminant);
 
       // Find the nearest root that lies in the acceptable range.
       auto root = (h - sqrt_d) / a;
@@ -79,7 +79,7 @@ class Sphere final : public Hittable {
       const Vec3F outward_normal = (hit_result.point - center_) / radius_;
       hit_result.SetFaceNormal(r, outward_normal);
       hit_result.has_hit = true;
-      //hit_result.material = material_;
+      hit_result.material = material;
 
       return hit_result;
     }
@@ -87,5 +87,7 @@ class Sphere final : public Hittable {
  private:
   Vec3F center_{};
   float radius_ = 0.f;
-  //std::shared_ptr<Material> material_ = nullptr;
+
+public:
+  Material* material = nullptr;
 };
