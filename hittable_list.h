@@ -4,17 +4,17 @@
 
 class HittableList final : public Hittable {
  public:
-  __device__ constexpr HittableList() noexcept = default;
+  __device__ HittableList() noexcept = default;
   __device__ HittableList(Hittable** objects, const int object_count) {
     objects_ = objects;
     object_count_ = object_count;
+
+    for (int i = 0; i < object_count_; i++) {
+      const Hittable* obj = objects_[i];
+
+      aabb_ = AABB(aabb_, obj->GetBoundingBox());
+    }
   }
-
-  //__device__ void Clear() { objects.clear(); }
-
-  //__device__ void Add(const std::shared_ptr<Hittable>& object) {
-  //  objects.push_back(object);
-  //}
 
   __device__  [[nodiscard]] HitResult DetectHit(
       const RayF& r, const IntervalF& ray_interval) const noexcept override {
@@ -34,8 +34,19 @@ class HittableList final : public Hittable {
     return result;
   }
 
+  __device__ [[nodiscard]] AABB GetBoundingBox() const noexcept override {
+    return aabb_;
+  }
+
+  __device__ [[nodiscard]] Hittable** objects() const noexcept {
+    return objects_;
+  }
+  __device__ [[nodiscard]] int object_count() const noexcept {
+    return object_count_;
+  }
+
 private:
-  //std::vector<std::shared_ptr<Hittable>> objects{};
   Hittable** objects_ = nullptr;
   int object_count_ = 0;
+  AABB aabb_{};
 };

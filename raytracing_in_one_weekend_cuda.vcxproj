@@ -82,6 +82,8 @@
     <CudaCompile Include="main.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="aabb.h" />
+    <ClInclude Include="bvh.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="color.h" />
     <ClInclude Include="device_random.h" />
@@ -91,7 +93,9 @@
     <ClInclude Include="material.h" />
     <ClInclude Include="math_utility.h" />
     <ClInclude Include="ray.h" />
+    <ClInclude Include="texture.h" />
     <ClInclude Include="vec3.h" />
+    <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="hittable.cpp" />

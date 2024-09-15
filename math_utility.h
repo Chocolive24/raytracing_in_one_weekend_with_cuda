@@ -25,17 +25,17 @@ __host__ __device__ [[nodiscard]] inline float SchlickApproxReflectance(
   return r0 + (1.0f - r0) * std::pow((1.0f - cosine), 5.0f);
 }
 
-template <typename T>
-__host__ __device__ [[nodiscard]] T GetRandomDouble() noexcept {
-  // Returns a random real in [0,1).
-  return rand() / (RAND_MAX + 1.0);
-}
-
-template<typename T>
-__host__ __device__ [[nodiscard]] T GetRandomDoubleInRange(const T& min,
-                                                           const T& max) {
-  // Returns a random real in [min,max).
-  return min + (max - min) * GetRandomDouble<T>();
-}
+//template <typename T>
+//__host__ __device__ [[nodiscard]] T GetRandomNumber() noexcept {
+//  // Returns a random real in [0,1).
+//  return rand() / (RAND_MAX + 1.0);
+//}
+//
+//template<typename T>
+//__host__ __device__ [[nodiscard]] T GetRandomNbrInRange(const T& min,
+//                                                           const T& max) {
+//  // Returns a random real in [min,max).
+//  return min + (max - min) * GetRandomNumber<T>();
+//}
 
 }  // namespace math_utility

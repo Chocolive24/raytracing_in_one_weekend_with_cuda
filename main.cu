@@ -1,17 +1,23 @@
 ﻿#include "camera.h"
 #include "color.h"
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
 #include "hittable.h"
 #include "hittable_list.h"
 #include "ray.h"
 
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
 #include <curand_kernel.h>
 
 #include <ctime>
 #include <iostream>
 
+#include "bvh.h"
+
 #define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
+
+static constexpr short kXVal = 11;
+static constexpr short kYVal = 11;
+static constexpr short kObjectCount = kXVal * 2 * kYVal * 2 + 1 + 3;
 
 void check_cuda(cudaError_t result, char const* const func,
                 const char* const file, int const line) {
@@ -24,60 +30,12 @@ void check_cuda(cudaError_t result, char const* const func,
     std::exit(99);
   }
 }
-//
-//#define RANDOM_VEC3 Vec3F{curand_uniform(local_rand_state), curand_uniform(local_rand_state), curand_uniform(local_rand_state)}
-//
-//
-////__device__ [[nodiscard]] Vec3F GetRandomVector(curandState* local_rand_state) noexcept {
-////  return Vec3F{curand_uniform(local_rand_state),
-////               curand_uniform(local_rand_state),
-////               curand_uniform(local_rand_state)};
-////}
-//
-//__device__ [[nodiscard]] Vec3F GetRandVecInUnitSphere(curandState* local_rand_state) noexcept {
-//  Vec3F p{};
-//  do {
-//    // Transform random value in range [0 ; 1] to range [-1 ; 1].
-//    p = 2.0f * RANDOM_VEC3 - Vec3F(1, 1, 1);
-//  } while (p.LengthSquared() >= 1.0f);
-//  return p;
-//}
-//
-//__device__ [[nodiscard]] Vec3F GetRandVecOnHemisphere(
-//    curandState* local_rand_state, const Vec3F& hit_normal) noexcept {
-//  const Vec3F on_unit_sphere = GetRandVecInUnitSphere(local_rand_state).Normalized();
-//  if (on_unit_sphere.DotProduct(hit_normal) > 0.f) // In the same hemisphere as the normal
-//    return on_unit_sphere;
-//
-//  return -on_unit_sphere;
-//}
-//
-//
-//  __device__ [[nodiscard]] Color CalculatePixelColor(
-//    const RayF& r, Hittable** world, curandState* local_rand_state) noexcept {
-//  const HitResult hit_result =
-//      (*world)->DetectHit(r, IntervalF(0.f, math_utility::kInfinity));
-//  RayF cur_ray = r;
-//  float cur_attenuation = 1.f;
-//  for (int i = 0; i < 50; i++) {
-//    if (hit_result.has_hit) {
-//      const auto direction =
-//          GetRandVecOnHemisphere(local_rand_state, hit_result.normal);
-//
-//      cur_attenuation *= 0.5f;
-//      cur_ray = RayF{hit_result.point, direction};
-//    } else {
-//      const Vec3F unit_direction = cur_ray.direction().Normalized();
-//      const float a = 0.5f * (unit_direction.y + 1.f);
-//      const auto color =
-//          (1.f - a) * Color(1.f, 1.f, 1.f) + a * Color(0.5f, 0.7f, 1.f);
-//
-//      return cur_attenuation * color;
-//    }
-//  }
-//
-//  return Vec3F{0.f, 0.f, 0.f};  // exceeded recursion.
-//}
+
+__global__ void RandInit(curandState* rand_state) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curand_init(1984, 0, 0, rand_state);
+  }
+}
 
 __global__ void RenderInit(curandState* rand_state) {
   const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -87,12 +45,15 @@ __global__ void RenderInit(curandState* rand_state) {
     return;
 
   const int pixel_index = j * Camera::kImageWidth + i;
-  // Each thread gets same seed, a different sequence number, no offset
-  curand_init(1984, pixel_index, 0, &rand_state[pixel_index]);
+  // Original: Each thread gets same seed, a different sequence number, no
+  // offset curand_init(1984, pixel_index, 0, &rand_state[pixel_index]); BUGFIX,
+  // see Issue#2: Each thread gets different seed, same sequence for performance
+  // improvement of about 2x!
+  curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
 }
 
 __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
-                       const curandState* rand_state) {
+                        curandState* rand_state) {
   const int i = threadIdx.x + blockIdx.x * blockDim.x;
   const int j = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -104,39 +65,92 @@ __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
   Vec3F col(0, 0, 0);
 
   for (int s = 0; s < Camera::kSamplesPerPixel; s++) {
-    const auto offset = Vec3F(curand_uniform(&local_rand_state) - 0.5f,
-                              curand_uniform(&local_rand_state) - 0.5f, 0.f);
-    const auto pixel_sample = (*camera)->pixel_00_loc +
-                              ((i + offset.x) * (*camera)->pixel_delta_u) +
-                              ((j + offset.y) * (*camera)->pixel_delta_v);
-    const auto ray_direction = pixel_sample - (*camera)->kLookFrom;
-
-    const RayF r((*camera)->kLookFrom, ray_direction);
-
+    const RayF r((*camera)->GetRayAtLocation(i, j, &local_rand_state));
     col += Camera::CalculatePixelColor(r, world, &local_rand_state);
   }
 
+  rand_state[pixel_index] = local_rand_state;
   fb[pixel_index] = col / Camera::kSamplesPerPixel;
 }
 
-__global__ void CreateWorld(Camera** d_camera, Hittable** d_list, Hittable** d_world) {
+__global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, Hittable** d_world, 
+    curandState* rand_state, BVH_Node** d_bvh_node) {
   if (threadIdx.x == 0 && blockIdx.x == 0) {
-    d_list[0] = new Sphere(Vec3F(0.0f, -100.5f, -1.0f), 100.f,
-                           new Lambertian(Color(0.8f, 0.8f, 0.0f)));
 
-    d_list[1] = new Sphere(Vec3F(0.0f, 0.0f, -1.2f), 0.5f,
-                           new Lambertian(Color(0.1f, 0.2f, 0.5f)));
+    curandState local_rand_state = *rand_state;
+    d_list[0] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
+                           new Lambertian(new SolidColor(0.5, 0.5, 0.5)));
 
-    d_list[2] = new Sphere(Vec3F(-1.0f, 0.0f, -1.0f), 0.5f,
-        new Dielectric(1.50f));
+    int i = 1;
+    for (int a = -kXVal; a < kXVal; a++) {
+      for (int b = -kYVal; b < kYVal; b++) {
+        const float choose_mat = RANDOM;
+        const Vec3F center(a + RANDOM, 0.2f, b + RANDOM);
 
-    d_list[3] = new Sphere(Vec3F(-1.0f, 0.0f, -1.0f), 0.4f, 
-            new Dielectric(1.00f / 1.50f));
+        if (choose_mat < 0.8f) {
+          auto albedo = GetRandomVector(&local_rand_state) *
+                        GetRandomVector(&local_rand_state);
+          const auto center2 = 
+              center + Vec3F(0, RANDOM * 0.5f, 0.f);
+          d_list[i++] = new Sphere(center, center2, 0.2f, 
+              new Lambertian(new SolidColor(albedo)));
+        }
+        else if (choose_mat < 0.95f) {
+          d_list[i++] = new Sphere(center, 0.2f,
+              new Metal(Vec3F(0.5f * (1.0f + RANDOM), 0.5f * (1.0f + RANDOM),
+                             0.5f * (1.0f + RANDOM)),0.5f * RANDOM));
+        }
+        else {
+          d_list[i++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
+        }
+      }
+    }
 
-    d_list[4] = new Sphere(Vec3F(1.0f, 0.0f, -1.0f), 0.5f,
-                           new Metal(Color(0.8f, 0.6f, 0.2f), 1.0f));
+    d_list[i++] = new Sphere(Vec3F(0, 1, 0), 1.0, new Dielectric(1.5f));
+    d_list[i++] = new Sphere(Vec3F(-4, 1, 0), 1.0, 
+        new Lambertian(new SolidColor(0.4f, 0.2f, 0.1f)));
+    d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0, new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
 
-    *d_world = new HittableList(d_list, 5);
+    *rand_state = local_rand_state;
+    //*d_bvh_node = new BVH_Node(**d_world, local_rand_state);
+    *d_world = new HittableList(d_list, kObjectCount);
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
+__global__ void CheckeredSpheres(Camera** d_camera, Hittable** d_list,
+                            Hittable** d_world, curandState* rand_state) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curandState local_rand_state = *rand_state;
+
+    const auto checker =
+        new CheckerTexture(0.32f, Color(.2f, .3f, .1f), Color(.9f, .9f, .9f));
+
+    d_list[0] =
+        new Sphere(Vec3F(0, -10.f, 0), 10, new Lambertian(checker));
+    d_list[1] =
+        new Sphere(Vec3F(0, 10, 0), 10, new Lambertian(checker));
+
+    *rand_state = local_rand_state;
+    *d_world = new HittableList(d_list, 2);
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
+__global__ void Earth(Camera** d_camera, Hittable** d_list, Hittable** d_world,
+                      curandState* rand_state, unsigned char* d_image_data,
+                      ImageAttributes* img_attrib, ImageTexture * *tex) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curandState local_rand_state = *rand_state;
+
+    *tex = new ImageTexture(d_image_data, *img_attrib);
+
+    d_list[0] = new Sphere(Vec3F(0, 0, 0), 2, new Lambertian(*tex));
+
+    *rand_state = local_rand_state;
+    *d_world = new HittableList(d_list, 1);
     *d_camera = new Camera();
     (*d_camera)->Initialize();
   }
@@ -151,9 +165,9 @@ __global__ void FreeWorld(Camera** d_camera, Hittable** d_list, Hittable** d_wor
     }
     if (*d_world) {
       delete *d_world;
-      *d_world = nullptr;  // Set the pointer to nullptr after deletion
+      *d_world = nullptr;
     }
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < kObjectCount; i++) {
       // Dynamic_cast is not allowed in device code so we use static_cast and yes I
       // know that is a real code smell here but the objective is to write the code
       // in a weekend so I don't want to search for a better architecture now sorry.
@@ -172,31 +186,81 @@ int main() {
   Vec3F* fb = nullptr;
   CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&fb), kFbSize));
 
-  constexpr int kTx = 8;
-  constexpr int kTy = 8;
+  curandState* d_rand_state;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_rand_state),
+                               kNumPixels * sizeof(curandState)));
+
+  curandState* d_rand_state2;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_rand_state2), 1 * sizeof(curandState)));
+
+   // we need that 2nd random state to be initialized for the world creation
+  RandInit<<<1, 1>>>(d_rand_state2);
+  CHECK_CUDA_ERRORS(cudaGetLastError());
+  CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
+
+  // Allocate the camera on the GPU.
+  Camera** d_camera = nullptr;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_camera), sizeof(Camera*)));
+
+  // Allocate the world on the GPU.
+  Hittable** d_list;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_list),
+                               kObjectCount * sizeof(Hittable*)));
+  Hittable** d_world;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_world), sizeof(Hittable*)));
+
+  BVH_Node** d_bvh_node;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_bvh_node), sizeof(BVH_Node*)));
+
+  switch(1)
+  {
+    case 1:
+      BouncingSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_bvh_node);
+      break;
+    case 2:
+      CheckeredSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
+      break;
+    case 3: {
+      const auto earth_image = ImageFileBuffer("../../images/earthmap.jpg");
+
+      // Allocate Unified Memory so that both the CPU and GPU can access it
+      unsigned char* d_image_data;
+      const std::size_t image_size = earth_image.size();
+      CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_image_data), image_size));
+
+      // Copy the image data to Unified Memory
+      memcpy(d_image_data, earth_image.b_data_, image_size);
+
+      ImageAttributes* d_img_attrib = nullptr;
+      CHECK_CUDA_ERRORS(cudaMallocManaged(
+          reinterpret_cast<void**>(&d_img_attrib), sizeof(ImageAttributes)));
+
+      *d_img_attrib = earth_image.attributes;
+
+      // Allocate the texture on the GPU.
+      ImageTexture** d_texture = nullptr;
+      CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_texture),
+                                   sizeof(ImageTexture*)));
+
+      Earth<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_image_data,
+                      d_img_attrib, d_texture);
+      break;
+    }
+    default:
+      break;
+  }
+
+  CHECK_CUDA_ERRORS(cudaGetLastError());
+  CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
+
+  constexpr int kTx = 16;
+  constexpr int kTy = 16;
 
   const std::clock_t start = clock();
 
   // Render our buffer
   dim3 blocks(Camera::kImageWidth / kTx + 1, Camera::kImageHeight / kTy + 1);
   dim3 threads(kTx, kTy);
-
-  // Allocate the camera on the GPU.
-  Camera** d_camera = nullptr;
-  CHECK_CUDA_ERRORS(
-      cudaMalloc(reinterpret_cast<void**>(&d_camera), sizeof(Camera*)));
-  // Allocate the world on the GPU.
-  Hittable** d_list;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_list), 5 * sizeof(Hittable*)));
-  Hittable** d_world;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_world), sizeof(Hittable*)));
-  CreateWorld<<<1, 1>>>(d_camera, d_list, d_world);
-  CHECK_CUDA_ERRORS(cudaGetLastError());
-  CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
-
-  curandState* d_rand_state;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_rand_state),
-                     kNumPixels * sizeof(curandState)));
 
   RenderInit<<<blocks, threads>>>(d_rand_state);
   CHECK_CUDA_ERRORS(cudaGetLastError());

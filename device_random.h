@@ -4,6 +4,8 @@
 
 #include <curand_kernel.h>
 
+#define RANDOM (curand_uniform(&local_rand_state))
+
 __device__ [[nodiscard]] inline Vec3F GetRandomVector(
     curandState* local_rand_state) noexcept {
   return Vec3F{curand_uniform(local_rand_state),
@@ -28,4 +30,13 @@ __device__ [[nodiscard]] inline Vec3F GetRandVecOnHemisphere(
     return on_unit_sphere;
 
   return -on_unit_sphere;
+}
+
+__device__ [[nodiscard]] inline Vec3F GetRandomVecInUnitDisk(curandState* local_rand_state) {
+  while (true) {
+    const auto p = 2.f * Vec3F(curand_uniform(local_rand_state),
+                         curand_uniform(local_rand_state), 0) - Vec3F(1, 1, 0);
+    if (p.LengthSquared() < 1.f) 
+        return p;
+  }
 }

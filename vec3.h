@@ -8,8 +8,8 @@
 // The use of __host__ and __device__ enable the methods to be executed on
 // the CPU and the GPU.
 // Also note that current GPUs run fastest when they do calculations in single
-// precision. Double precision calculations can be several times slower on some
-// GPUs. That's why I will use Vec3F in the entire program.
+// precision. Double precision calculations can be several times slower on some GPUs.
+// That's why I will use Vec3F in the entire program.
 // ===================================================================================
 
 template<typename T>
@@ -124,45 +124,6 @@ public:
     constexpr float s = 1e-8f;
     return (std::fabs(x) < s) && (std::fabs(y) < s) && (std::fabs(z) < s);
   }
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random() noexcept {
-  //  return Vec3<T>(random_double(), random_double(), random_double());
-  //}
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random(
-  //    const T& min, const T& max) noexcept {
-  //  return Vec3<T>(random_double(min, max), random_double(min, max),
-  //                 random_double(min, max));
-  //}
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random_in_unit_sphere() {
-  //  while (true) {
-  //    const auto p = random(-1, 1);
-  //    if (p.LengthSquared() < 1) 
-  //        return p;
-  //  }
-  //}
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random_in_unit_disk() {
-  //  while (true) {
-  //    const auto p = Vec3<T>(random_double(-1, 1), random_double(-1, 1), 0);
-  //    if (p.LengthSquared() < 1) 
-  //        return p;
-  //  }
-  //}
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random_unit() {
-  //  return random_in_unit_sphere().Normalized();
-  //}
-
-  //__host__ __device__ [[nodiscard]] static Vec3<T> random_in_hemisphere(
-  //    const Vec3<T>& normal) {
-  //  const auto on_unit_sphere = random_unit();
-  //  if (on_unit_sphere.DotProduct(normal) > 0.0)  // In the same hemisphere as the normal
-  //    return on_unit_sphere;
-  //  else
-  //    return -on_unit_sphere;
-  //}
 
   T x = 0;
   T y = 0;

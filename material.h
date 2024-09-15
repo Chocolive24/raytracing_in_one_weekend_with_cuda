@@ -4,6 +4,7 @@
 #include "hittable.h"
 #include "ray.h"
 #include "device_random.h"
+#include "texture.h"
 
 class Material {
  public:
@@ -21,7 +22,8 @@ class Material {
 
 class Lambertian final : public Material {
  public:
-  __device__ constexpr Lambertian(const Color& albedo) noexcept : albedo_(albedo) {}
+  //__device__ Lambertian(const Color& albedo) noexcept : texture_(new SolidColor(albedo)) {}
+  __device__ Lambertian(Texture* texture) noexcept : texture_(texture) {}
   __device__ Lambertian(Lambertian&& other) noexcept = default;
   __device__ Lambertian& operator=(Lambertian&& other) noexcept = default;
   __device__ Lambertian(const Lambertian& other) noexcept = default;
@@ -38,13 +40,14 @@ class Lambertian final : public Material {
     if (scatter_direction.IsNearZero()) 
         scatter_direction = hit.normal;
 
-    scattered = RayF(hit.point, scatter_direction);
-    attenuation = albedo_;
+    scattered = RayF(hit.point, scatter_direction, r_in.time());
+    attenuation = texture_->ComputeColor(hit.tex_coord.u, hit.tex_coord.v, hit.point);
     return true;
   }
 
  private:
-  Color albedo_{};
+  //Color albedo_{};
+  Texture* texture_ = nullptr;
 };
 
 class Metal final : public Material {
@@ -63,7 +66,7 @@ class Metal final : public Material {
     Vec3F reflected = r_in.direction().Reflect(hit.normal);
     reflected = reflected.Normalized() + 
         (fuzz_ * GetRandVecInUnitSphere(local_rand_state).Normalized());
-    scattered = RayF(hit.point, reflected);
+    scattered = RayF(hit.point, reflected, r_in.time());
     attenuation = albedo_;
 
     return scattered.direction().DotProduct(hit.normal) > 0;
@@ -103,7 +106,7 @@ class Dielectric final : public Material {
     else
       direction = unit_direction.Refract(hit.normal, ri);
 
-    scattered = RayF(hit.point, direction);
+    scattered = RayF(hit.point, direction, r_in.time());
     return true;
   }
 
