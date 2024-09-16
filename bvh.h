@@ -3,8 +3,6 @@
 #include "device_random.h"
 #include "hittable.h"
 
-
-
 class BVH_Node final : public Hittable {
  public:
   //__device__ BVH_Node(HittableList list, curandState* local_rand_state)

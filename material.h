@@ -8,12 +8,12 @@
 
 class Material {
  public:
-  __device__ constexpr Material() noexcept = default;
-  __device__ Material(Material&& other) noexcept = default;
-  __device__ Material& operator=(Material&& other) noexcept = default;
-  __device__ Material(const Material& other) noexcept = default;
-  __device__ Material& operator=(const Material& other) noexcept = default;
-  __device__ virtual ~Material() noexcept = default;
+  __host__ __device__ constexpr Material() noexcept = default;
+  __host__ __device__ Material(Material&& other) noexcept = default;
+  __host__ __device__ Material& operator=(Material&& other) noexcept = default;
+  __host__ __device__ Material(const Material& other) noexcept = default;
+  __host__ __device__ Material& operator=(const Material& other) noexcept = default;
+  __host__ __device__ virtual ~Material() noexcept = default;
 
   __device__ virtual bool Scatter(const RayF& r_in, const HitResult& hit,
                                   Color& attenuation, RayF& scattered,
@@ -23,12 +23,12 @@ class Material {
 class Lambertian final : public Material {
  public:
   //__device__ Lambertian(const Color& albedo) noexcept : texture_(new SolidColor(albedo)) {}
-  __device__ Lambertian(Texture* texture) noexcept : texture_(texture) {}
-  __device__ Lambertian(Lambertian&& other) noexcept = default;
-  __device__ Lambertian& operator=(Lambertian&& other) noexcept = default;
-  __device__ Lambertian(const Lambertian& other) noexcept = default;
-  __device__ Lambertian& operator=(const Lambertian& other) noexcept = default;
-  __device__ ~Lambertian() noexcept override = default;
+  __host__ __device__ Lambertian(Texture* texture) noexcept : texture_(texture) {}
+  __host__ __device__ Lambertian(Lambertian&& other) noexcept = default;
+  __host__ __device__ Lambertian& operator=(Lambertian&& other) noexcept = default;
+  __host__ __device__ Lambertian(const Lambertian& other) noexcept = default;
+  __host__ __device__ Lambertian& operator=(const Lambertian& other) noexcept = default;
+  __host__ __device__ ~Lambertian() noexcept override = default;
 
   __device__ bool Scatter(const RayF& r_in, const HitResult& hit,
                           Color& attenuation, RayF& scattered,
@@ -52,13 +52,13 @@ class Lambertian final : public Material {
 
 class Metal final : public Material {
  public:
-  __device__ constexpr Metal(const Color& albedo, const float fuzz) noexcept
+  __host__ __device__ constexpr Metal(const Color& albedo, const float fuzz) noexcept
       : albedo_(albedo), fuzz_(fuzz) {}
-  __device__ Metal(Metal&& other) noexcept = default;
-  __device__ Metal& operator=(Metal&& other) noexcept = default;
-  __device__ Metal(const Metal& other) noexcept = default;
-  __device__ Metal& operator=(const Metal& other) noexcept = default;
-  __device__ ~Metal() noexcept override = default;
+  __host__ __device__ Metal(Metal&& other) noexcept = default;
+  __host__ __device__ Metal& operator=(Metal&& other) noexcept = default;
+  __host__ __device__ Metal(const Metal& other) noexcept = default;
+  __host__ __device__ Metal& operator=(const Metal& other) noexcept = default;
+  __host__ __device__ ~Metal() noexcept override = default;
 
   __device__ bool Scatter(const RayF& r_in, const HitResult& hit,
                           Color& attenuation, RayF& scattered,
@@ -79,13 +79,13 @@ class Metal final : public Material {
 
 class Dielectric final : public Material {
  public:
-  __device__ Dielectric(const float refraction_index)
-      : refraction_index_(refraction_index) {}
-  __device__ Dielectric(Dielectric&& other) noexcept = default;
-  __device__ Dielectric& operator=(Dielectric&& other) noexcept = default;
-  __device__ Dielectric(const Dielectric& other) noexcept = default;
-  __device__ Dielectric& operator=(const Dielectric& other) noexcept = default;
-  __device__ ~Dielectric() noexcept override = default;
+  __host__ __device__ Dielectric(const float refraction_index)
+       : refraction_index_(refraction_index) {}
+  __host__ __device__ Dielectric(Dielectric&& other) noexcept = default;
+  __host__ __device__ Dielectric& operator=(Dielectric&& other) noexcept = default;
+  __host__ __device__ Dielectric(const Dielectric& other) noexcept = default;
+  __host__ __device__ Dielectric& operator=(const Dielectric& other) noexcept = default;
+  __host__ __device__ ~Dielectric() noexcept override = default;
 
   __device__ bool Scatter(const RayF& r_in, const HitResult& hit, Color& attenuation, RayF& scattered,
                           curandState* local_rand_state) const override {

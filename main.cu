@@ -52,8 +52,9 @@ __global__ void RenderInit(curandState* rand_state) {
   curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
 }
 
-__global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
+__global__ void Render(Vec3F* fb, Camera* camera, Hittable** world,
                         curandState* rand_state) {
+
   const int i = threadIdx.x + blockIdx.x * blockDim.x;
   const int j = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -65,7 +66,8 @@ __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
   Vec3F col(0, 0, 0);
 
   for (int s = 0; s < Camera::kSamplesPerPixel; s++) {
-    const RayF r((*camera)->GetRayAtLocation(i, j, &local_rand_state));
+
+    const RayF r((camera)->GetRayAtLocation(i, j, &local_rand_state));
     col += Camera::CalculatePixelColor(r, world, &local_rand_state);
   }
 
@@ -73,8 +75,8 @@ __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
   fb[pixel_index] = col / Camera::kSamplesPerPixel;
 }
 
-__global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, Hittable** d_world, 
-    curandState* rand_state, Hittable** d_bvh_node) {
+__global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, 
+    Hittable** d_world, curandState* rand_state) {
   // Step 1: Create the world's objects.
   if (threadIdx.x == 0 && blockIdx.x == 0) {
 
@@ -113,97 +115,89 @@ __global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, Hittable**
     d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0, new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
 
     *rand_state = local_rand_state;
-    // Step 2: Initialize the world with the HittableList
+
     *d_world = new HittableList(d_list, kObjectCount);
-
-    // Step 3: Create a BVH node from the world
-    //*d_bvh_node = new BVH_Node(d_world, kObjectCount, rand_state);
-
-    //// Step 4: Replace the world with the BVH node
-    //*d_world = *d_bvh_node;  // Now the world is the BVH node
 
     *d_camera = new Camera();
     (*d_camera)->Initialize();
   }
 }
-//
-//void BVH(Camera** d_camera, Hittable** d_list,
-//         Hittable** d_world, curandState* rand_state, 
-//         Hittable** d_bvh_node) {
-//  // Step 1: Create the world's objects.
-//  if (threadIdx.x == 0 && blockIdx.x == 0) {
-//    curandState local_rand_state = *rand_state;
-//    d_list[0] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
-//                           new Lambertian(new SolidColor(0.5, 0.5, 0.5)));
-//
-//    int i = 1;
-//    for (int a = -kXVal; a < kXVal; a++) {
-//      for (int b = -kYVal; b < kYVal; b++) {
-//        const float choose_mat = RANDOM;
-//        const Vec3F center(a + RANDOM, 0.2f, b + RANDOM);
-//
-//        if (choose_mat < 0.8f) {
-//          auto albedo = GetRandomVector(&local_rand_state) *
-//                        GetRandomVector(&local_rand_state);
-//          const auto center2 = center + Vec3F(0, RANDOM * 0.5f, 0.f);
-//          d_list[i++] = new Sphere(center, center2, 0.2f,
-//                                   new Lambertian(new SolidColor(albedo)));
-//        } else if (choose_mat < 0.95f) {
-//          d_list[i++] = new Sphere(
-//              center, 0.2f,
-//              new Metal(Vec3F(0.5f * (1.0f + RANDOM), 0.5f * (1.0f + RANDOM),
-//                              0.5f * (1.0f + RANDOM)),
-//                        0.5f * RANDOM));
-//        } else {
-//          d_list[i++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
-//        }
-//      }
-//    }
-//
-//    d_list[i++] = new Sphere(Vec3F(0, 1, 0), 1.0, new Dielectric(1.5f));
-//    d_list[i++] = new Sphere(Vec3F(-4, 1, 0), 1.0,
-//                             new Lambertian(new SolidColor(0.4f, 0.2f, 0.1f)));
-//    d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0,
-//                             new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
-//
-//    *rand_state = local_rand_state;
-//    // Step 2: Initialize the world with the HittableList
-//    *d_world = new HittableList(d_list, kObjectCount);
-//
-//    // Step 3: Create a BVH node from the world
-//    *d_bvh_node = new BVH_Node(d_world, kObjectCount, rand_state);
-//
-//    //// Step 4: Replace the world with the BVH node
-//    //*d_world = *d_bvh_node;  // Now the world is the BVH node
-//
-//    *d_camera = new Camera();
-//    (*d_camera)->Initialize();
-//  }
-//}
 
-__global__ void CheckeredSpheres(Camera** d_camera, Hittable** d_list,
-                            Hittable** d_world, curandState* rand_state) {
+
+
+__global__ void BVH(Camera** d_camera, Hittable** d_list,
+                                Hittable** d_world, curandState* rand_state,
+                                Hittable** d_bvh_node) {
+  // Step 1: Create the world's objects.
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curandState local_rand_state = *rand_state;
+    d_list[0] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
+                           new Lambertian(new SolidColor(0.5, 0.5, 0.5)));
+
+    int i = 1;
+    for (int a = -kXVal; a < kXVal; a++) {
+      for (int b = -kYVal; b < kYVal; b++) {
+        const float choose_mat = RANDOM;
+        const Vec3F center(a + RANDOM, 0.2f, b + RANDOM);
+
+        if (choose_mat < 0.8f) {
+          auto albedo = GetRandomVector(&local_rand_state) *
+                        GetRandomVector(&local_rand_state);
+          const auto center2 = center + Vec3F(0, RANDOM * 0.5f, 0.f);
+          d_list[i++] = new Sphere(center, center2, 0.2f,
+                                   new Lambertian(new SolidColor(albedo)));
+        } else if (choose_mat < 0.95f) {
+          d_list[i++] = new Sphere(
+              center, 0.2f,
+              new Metal(Vec3F(0.5f * (1.0f + RANDOM), 0.5f * (1.0f + RANDOM),
+                              0.5f * (1.0f + RANDOM)),
+                        0.5f * RANDOM));
+        } else {
+          d_list[i++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
+        }
+      }
+    }
+
+    d_list[i++] = new Sphere(Vec3F(0, 1, 0), 1.0, new Dielectric(1.5f));
+    d_list[i++] = new Sphere(Vec3F(-4, 1, 0), 1.0,
+                             new Lambertian(new SolidColor(0.4f, 0.2f, 0.1f)));
+    d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0,
+                             new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
+
+    *rand_state = local_rand_state;
+
+    *d_world = new HittableList(d_list, kObjectCount);
+
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
+__global__ void CheckeredSpheres(Camera** d_camera, Hittable** u_list,
+                                 Hittable** d_list,
+                                 Hittable** d_world, curandState* rand_state) {
   if (threadIdx.x == 0 && blockIdx.x == 0) {
     curandState local_rand_state = *rand_state;
 
-    const auto checker =
-        new CheckerTexture(0.32f, Color(.2f, .3f, .1f), Color(.9f, .9f, .9f));
+    //const auto checker =
+    //    new CheckerTexture(0.32f, Color(.2f, .3f, .1f), Color(.9f, .9f, .9f));
 
-    d_list[0] =
-        new Sphere(Vec3F(0, -10.f, 0), 10, new Lambertian(checker));
-    d_list[1] =
-        new Sphere(Vec3F(0, 10, 0), 10, new Lambertian(checker));
+    //d_list[0] = new Sphere(Vec3F(0, -10.f, 0), 10, new Lambertian(checker));
+    //d_list[1] = new Sphere(Vec3F(0, 10, 0), 10, new Lambertian(checker));
 
     *rand_state = local_rand_state;
-    *d_world = new HittableList(d_list, 2);
-    *d_camera = new Camera();
-    (*d_camera)->Initialize();
+
+    d_list = u_list;
+
+    *d_world = new HittableList(d_list, 1);
+   /* *d_camera = new Camera();
+    (*d_camera)->Initialize();*/
   }
 }
 
 __global__ void Earth(Camera** d_camera, Hittable** d_list, Hittable** d_world,
                       curandState* rand_state, unsigned char* d_image_data,
-                      ImageAttributes* img_attrib, ImageTexture * *tex) {
+                      ImageAttributes* img_attrib, ImageTexture** tex) {
   if (threadIdx.x == 0 && blockIdx.x == 0) {
     curandState local_rand_state = *rand_state;
 
@@ -253,7 +247,7 @@ int main() {
                                kNumPixels * sizeof(curandState)));
 
   curandState* d_rand_state2;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_rand_state2), 1 * sizeof(curandState)));
+  CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_rand_state2), 1 * sizeof(curandState)));
 
   // we need that 2nd random state to be initialized for the world creation
   RandInit<<<1, 1>>>(d_rand_state2);
@@ -262,56 +256,118 @@ int main() {
 
   // Allocate the camera on the GPU.
   Camera** d_camera = nullptr;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_camera), sizeof(Camera*)));
+  CHECK_CUDA_ERRORS(
+      cudaMallocManaged(reinterpret_cast<void**>(&d_camera), sizeof(Camera*)));
 
   // Allocate the world on the GPU.
-  Hittable** d_list;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_list),
+  Hittable** d_list = nullptr;
+  CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_list),
                                kObjectCount * sizeof(Hittable*)));
-  Hittable** d_world;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_world), sizeof(Hittable*)));
+
+  Hittable** d_world = nullptr;
+  CHECK_CUDA_ERRORS(
+      cudaMallocManaged(reinterpret_cast<void**>(&d_world), sizeof(Hittable*)));
 
   Hittable** d_bvh_node;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_bvh_node), sizeof(Hittable*)));
+  CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_bvh_node),
+                                      sizeof(Hittable*)));
 
-  switch(1)
-  {
-    case 1:
-      BouncingSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_bvh_node);
-      break;
-    case 2:
-      CheckeredSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
-      break;
-    case 3: {
-      const auto earth_image = ImageFileBuffer("../../images/earthmap.jpg");
+  //switch(3)
+  //{
+  //  case 1:
+  //    BouncingSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
+  //    break;
+  //  case 2: {
+  //    BVH<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_bvh_node);
+  //    break;
+  //  }
+  //  case 3: {
+  //    Sphere* sphere;
+  //    CheckerTexture* checker;
+  //    Lambertian* material;
+  //    cudaMallocManaged(&sphere,sizeof(Sphere));  // Allocate unified memory for Sphere
+  //    cudaMallocManaged(&checker,sizeof(CheckerTexture));  // Allocate unified memory for Checker
+  //    cudaMallocManaged(&material,sizeof(Lambertian));  // Allocate unified memory for Material
 
-      // Allocate Unified Memory so that both the CPU and GPU can access it
-      unsigned char* d_image_data;
-      const std::size_t image_size = earth_image.size();
-      CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_image_data), image_size));
+  //    new (checker) CheckerTexture(0.32f, Color(.2f, .3f, .1f), Color(.9f, .9f, .9f));
+  //    new (material) Lambertian(checker);
+  //    new (sphere) Sphere(Vec3F(0, -10.f, 0), 10, material);
 
-      // Copy the image data to Unified Memory
-      memcpy(d_image_data, earth_image.b_data_, image_size);
+  //    CheckeredSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, sphere);
+  //    break;
+  //  }
+  //  case 4: {
+  //    const auto earth_image = ImageFileBuffer("../../images/earthmap.jpg");
 
-      ImageAttributes* d_img_attrib = nullptr;
-      CHECK_CUDA_ERRORS(cudaMallocManaged(
-          reinterpret_cast<void**>(&d_img_attrib), sizeof(ImageAttributes)));
+  //    // Allocate Unified Memory so that both the CPU and GPU can access it
+  //    unsigned char* d_image_data;
+  //    const std::size_t image_size = earth_image.size();
+  //    CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_image_data), image_size));
 
-      *d_img_attrib = earth_image.attributes;
+  //    // Copy the image data to Unified Memory
+  //    memcpy(d_image_data, earth_image.b_data_, image_size);
 
-      // Allocate the texture on the GPU.
-      ImageTexture** d_texture = nullptr;
-      CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_texture),
-                                   sizeof(ImageTexture*)));
+  //    ImageAttributes* d_img_attrib = nullptr;
+  //    CHECK_CUDA_ERRORS(cudaMallocManaged(
+  //        reinterpret_cast<void**>(&d_img_attrib), sizeof(ImageAttributes)));
 
-      Earth<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_image_data,
-                      d_img_attrib, d_texture);
-      break;
-    }
-    default:
-      break;
-  }
+  //    *d_img_attrib = earth_image.attributes;
 
+  //    // Allocate the texture on the GPU.
+  //    ImageTexture** d_texture = nullptr;
+  //    CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_texture),
+  //                                 sizeof(ImageTexture*)));
+
+  //    Earth<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_image_data,
+  //                    d_img_attrib, d_texture);
+  //    break;
+  //  }
+  //  default:
+  //    break;
+  //}
+
+  //CheckeredSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
+  /*CHECK_CUDA_ERRORS(cudaGetLastError());
+  CHECK_CUDA_ERRORS(cudaDeviceSynchronize());*/
+
+  // Allocate device memory
+  Texture* u_checker;
+  Material* u_material;
+  Sphere* u_sphere1;
+
+  CHECK_CUDA_ERRORS(cudaMallocManaged(&u_checker, sizeof(CheckerTexture)));
+  CHECK_CUDA_ERRORS(cudaMallocManaged(&u_material, sizeof(Lambertian)));
+  CHECK_CUDA_ERRORS(cudaMallocManaged(&u_sphere1, sizeof(Sphere)));
+
+  // Initialize objects on the host
+  new (u_checker) CheckerTexture(0.32f, Color(.2f, .3f, .1f), Color(.9f, .9f, .9f));
+  new (u_material) Lambertian(u_checker);
+  new (u_sphere1) Sphere(Vec3F(0, -10, 0), 10, u_material);
+
+  // Allocate the world on the GPU.
+  Hittable** u_list = nullptr;
+  CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&u_list),
+                                      kObjectCount * sizeof(Hittable*)));
+
+  u_list[0] = u_sphere1;
+
+  Hittable* u_world;
+  CHECK_CUDA_ERRORS(cudaMallocManaged(&u_world, sizeof(Hittable)));
+
+  new (u_world) HittableList(u_list, 1, true);
+  std::cout << u_world->GetBoundingBox().x.max << '\n';
+  *d_world = u_world;
+
+  Camera* u_cam;
+  CHECK_CUDA_ERRORS(cudaMallocManaged(&u_cam, sizeof(Camera)));
+
+  new (u_cam) Camera();
+  u_cam->Initialize();
+  std::cout << u_cam->defocus_angle << '\n';
+  *d_camera = u_cam;
+  //(*d_camera)->Initialize();
+
+  CheckeredSpheres<<<1, 1>>>(d_camera, u_list, d_list, d_world, d_rand_state2);
   CHECK_CUDA_ERRORS(cudaGetLastError());
   CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
@@ -328,7 +384,7 @@ int main() {
   CHECK_CUDA_ERRORS(cudaGetLastError());
   CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 
-  Render<<<blocks, threads>>>(fb, d_camera, d_world, d_rand_state);
+  Render<<<blocks, threads>>>(fb, u_cam, d_world, d_rand_state);
   CHECK_CUDA_ERRORS(cudaGetLastError());
   CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
 

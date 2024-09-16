@@ -5,6 +5,17 @@
 class HittableList final : public Hittable {
  public:
   __host__ __device__ HittableList() noexcept = default;
+  __host__ HittableList(Hittable** objects, const int object_count, bool host) {
+    objects_ = objects;
+    object_count_ = object_count;
+
+    for (int i = 0; i < object_count_; i++) {
+      const Hittable* obj = objects_[i];
+
+      aabb_ = AABB(aabb_, obj->GetBoundingBox());
+    }
+  }
+
   __host__ __device__ HittableList(Hittable** objects, const int object_count) {
     objects_ = objects;
     object_count_ = object_count;
@@ -34,7 +45,7 @@ class HittableList final : public Hittable {
     return result;
   }
 
-  __host__ __device__ [[nodiscard]] AABB GetBoundingBox()
+  __host__  __device__ [[nodiscard]] AABB GetBoundingBox()
       const noexcept override {
     return aabb_;
   }

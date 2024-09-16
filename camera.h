@@ -54,9 +54,10 @@ class Camera {
     Vec3F cur_attenuation{1.f, 1.f, 1.f};
 
     for (int i = 0; i < kMaxBounceCount; i++) {
+     
       const HitResult hit_result = (*world)->DetectHit(cur_ray, 
           IntervalF(math_utility::kEpsilon, math_utility::kInfinity));
-
+      
       if (hit_result.has_hit) {
         RayF scattered{};
         Color attenuation{};
@@ -94,7 +95,6 @@ class Camera {
       const int x, const int y, curandState* local_rand_state) const noexcept {
     // Construct a camera ray originating from the defocus disk and directed at
     // a randomly sampled point around the pixel location i, j.
-
     const auto offset = Vec3F(curand_uniform(local_rand_state) - 0.5f,
                               curand_uniform(local_rand_state) - 0.5f, 0.f);
     const auto pixel_sample = pixel_00_loc +
