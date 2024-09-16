@@ -35,25 +35,26 @@ class HitResult {
 
 class Hittable {
  public:
-  __device__ constexpr Hittable() noexcept = default;
-  __device__ Hittable(Hittable&& other) noexcept = default;
-  __device__ Hittable& operator=(Hittable&& other) noexcept = default;
-  __device__ Hittable(const Hittable& other) noexcept = default;
-  __device__ Hittable& operator=(const Hittable& other) noexcept = default;
-  __device__ virtual ~Hittable() = default;
+  __host__ __device__ constexpr Hittable() noexcept = default;
+  __host__ __device__ Hittable(Hittable&& other) noexcept = default;
+  __host__ __device__ Hittable& operator=(Hittable&& other) noexcept = default;
+  __host__ __device__ Hittable(const Hittable& other) noexcept = default;
+  __host__ __device__ Hittable& operator=(const Hittable& other) noexcept = default;
+  __host__ __device__ virtual ~Hittable() = default;
 
   __device__ [[nodiscard]] virtual HitResult DetectHit(const RayF& r, 
       const IntervalF& ray_interval) const noexcept = 0;
 
-  __device__ virtual [[nodiscard]] AABB GetBoundingBox() const noexcept = 0;
+  __host__ __device__ virtual [[nodiscard]] AABB GetBoundingBox() const noexcept = 0;
 };
 
 class Sphere final : public Hittable {
  public:
-  __device__ constexpr Sphere() noexcept = default;
+  __host__ __device__ Sphere() noexcept = default;
 
   // Stationary sphere.
-  __device__ Sphere(const Vec3F& static_center, const float radius, Material* material) noexcept
+  __host__ __device__ Sphere(const Vec3F& static_center, const float radius,
+                            Material* material) noexcept
       : center_(static_center, Vec3F{0.f, 0.f, 0.f}),
         radius_(radius),
         is_moving_(false),
@@ -63,7 +64,7 @@ class Sphere final : public Hittable {
   }
 
   // Moving sphere.
-  __device__ Sphere(const Vec3F& center_1,
+  __host__ __device__ Sphere(const Vec3F& center_1,
                     const Vec3F& center_2, const float radius,
                     Material* material) noexcept
       : center_(center_1, center_2 - center_1),
@@ -78,7 +79,7 @@ class Sphere final : public Hittable {
     aabb_ = AABB(box1, box2);
   }
 
-   __device__ [[nodiscard]] HitResult DetectHit(
+  __device__ [[nodiscard]] HitResult DetectHit(
       const RayF& r, const IntervalF& ray_interval) const noexcept override
     {
       //const auto current_center = is_moving_ ? LerpSphereCenter(r.time()) : center_1_;
@@ -139,7 +140,8 @@ class Sphere final : public Hittable {
       return tex_coord;
   }
 
-  __device__ [[nodiscard]] AABB GetBoundingBox() const noexcept override {
+  __host__ __device__ [[nodiscard]] AABB GetBoundingBox()
+      const noexcept override {
     return aabb_;
   }
 

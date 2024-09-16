@@ -6,6 +6,17 @@
 
 #define RANDOM (curand_uniform(&local_rand_state))
 
+__device__ [[nodiscard]] inline int GetRandomInt(
+    [[maybe_unused]] const int min, const int max,
+    curandState* local_rand_state) noexcept {
+  // RANDOM only returns value between 0 and 1 in float. Because we want a rnd
+  // int
+  // between 0 and 2, we need to multiply the rnd result by 3 to get a number
+  // between 0 and 3 and then we can cast it in int to have a number between 0
+  // and 2.
+  return static_cast<int>(curand_uniform(local_rand_state) * (max + 1));
+}
+
 __device__ [[nodiscard]] inline Vec3F GetRandomVector(
     curandState* local_rand_state) noexcept {
   return Vec3F{curand_uniform(local_rand_state),

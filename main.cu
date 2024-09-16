@@ -74,7 +74,8 @@ __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
 }
 
 __global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, Hittable** d_world, 
-    curandState* rand_state, BVH_Node** d_bvh_node) {
+    curandState* rand_state, Hittable** d_bvh_node) {
+  // Step 1: Create the world's objects.
   if (threadIdx.x == 0 && blockIdx.x == 0) {
 
     curandState local_rand_state = *rand_state;
@@ -112,12 +113,73 @@ __global__ void BouncingSpheres(Camera** d_camera, Hittable** d_list, Hittable**
     d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0, new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
 
     *rand_state = local_rand_state;
-    //*d_bvh_node = new BVH_Node(**d_world, local_rand_state);
+    // Step 2: Initialize the world with the HittableList
     *d_world = new HittableList(d_list, kObjectCount);
+
+    // Step 3: Create a BVH node from the world
+    //*d_bvh_node = new BVH_Node(d_world, kObjectCount, rand_state);
+
+    //// Step 4: Replace the world with the BVH node
+    //*d_world = *d_bvh_node;  // Now the world is the BVH node
+
     *d_camera = new Camera();
     (*d_camera)->Initialize();
   }
 }
+//
+//void BVH(Camera** d_camera, Hittable** d_list,
+//         Hittable** d_world, curandState* rand_state, 
+//         Hittable** d_bvh_node) {
+//  // Step 1: Create the world's objects.
+//  if (threadIdx.x == 0 && blockIdx.x == 0) {
+//    curandState local_rand_state = *rand_state;
+//    d_list[0] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
+//                           new Lambertian(new SolidColor(0.5, 0.5, 0.5)));
+//
+//    int i = 1;
+//    for (int a = -kXVal; a < kXVal; a++) {
+//      for (int b = -kYVal; b < kYVal; b++) {
+//        const float choose_mat = RANDOM;
+//        const Vec3F center(a + RANDOM, 0.2f, b + RANDOM);
+//
+//        if (choose_mat < 0.8f) {
+//          auto albedo = GetRandomVector(&local_rand_state) *
+//                        GetRandomVector(&local_rand_state);
+//          const auto center2 = center + Vec3F(0, RANDOM * 0.5f, 0.f);
+//          d_list[i++] = new Sphere(center, center2, 0.2f,
+//                                   new Lambertian(new SolidColor(albedo)));
+//        } else if (choose_mat < 0.95f) {
+//          d_list[i++] = new Sphere(
+//              center, 0.2f,
+//              new Metal(Vec3F(0.5f * (1.0f + RANDOM), 0.5f * (1.0f + RANDOM),
+//                              0.5f * (1.0f + RANDOM)),
+//                        0.5f * RANDOM));
+//        } else {
+//          d_list[i++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
+//        }
+//      }
+//    }
+//
+//    d_list[i++] = new Sphere(Vec3F(0, 1, 0), 1.0, new Dielectric(1.5f));
+//    d_list[i++] = new Sphere(Vec3F(-4, 1, 0), 1.0,
+//                             new Lambertian(new SolidColor(0.4f, 0.2f, 0.1f)));
+//    d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0,
+//                             new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
+//
+//    *rand_state = local_rand_state;
+//    // Step 2: Initialize the world with the HittableList
+//    *d_world = new HittableList(d_list, kObjectCount);
+//
+//    // Step 3: Create a BVH node from the world
+//    *d_bvh_node = new BVH_Node(d_world, kObjectCount, rand_state);
+//
+//    //// Step 4: Replace the world with the BVH node
+//    //*d_world = *d_bvh_node;  // Now the world is the BVH node
+//
+//    *d_camera = new Camera();
+//    (*d_camera)->Initialize();
+//  }
+//}
 
 __global__ void CheckeredSpheres(Camera** d_camera, Hittable** d_list,
                             Hittable** d_world, curandState* rand_state) {
@@ -193,7 +255,7 @@ int main() {
   curandState* d_rand_state2;
   CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_rand_state2), 1 * sizeof(curandState)));
 
-   // we need that 2nd random state to be initialized for the world creation
+  // we need that 2nd random state to be initialized for the world creation
   RandInit<<<1, 1>>>(d_rand_state2);
   CHECK_CUDA_ERRORS(cudaGetLastError());
   CHECK_CUDA_ERRORS(cudaDeviceSynchronize());
@@ -209,8 +271,8 @@ int main() {
   Hittable** d_world;
   CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_world), sizeof(Hittable*)));
 
-  BVH_Node** d_bvh_node;
-  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_bvh_node), sizeof(BVH_Node*)));
+  Hittable** d_bvh_node;
+  CHECK_CUDA_ERRORS(cudaMalloc(reinterpret_cast<void**>(&d_bvh_node), sizeof(Hittable*)));
 
   switch(1)
   {

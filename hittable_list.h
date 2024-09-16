@@ -4,8 +4,8 @@
 
 class HittableList final : public Hittable {
  public:
-  __device__ HittableList() noexcept = default;
-  __device__ HittableList(Hittable** objects, const int object_count) {
+  __host__ __device__ HittableList() noexcept = default;
+  __host__ __device__ HittableList(Hittable** objects, const int object_count) {
     objects_ = objects;
     object_count_ = object_count;
 
@@ -34,14 +34,15 @@ class HittableList final : public Hittable {
     return result;
   }
 
-  __device__ [[nodiscard]] AABB GetBoundingBox() const noexcept override {
+  __host__ __device__ [[nodiscard]] AABB GetBoundingBox()
+      const noexcept override {
     return aabb_;
   }
 
-  __device__ [[nodiscard]] Hittable** objects() const noexcept {
+  __host__ __device__ [[nodiscard]] Hittable** objects() const noexcept {
     return objects_;
   }
-  __device__ [[nodiscard]] int object_count() const noexcept {
+  __host__ __device__ [[nodiscard]] int object_count() const noexcept {
     return object_count_;
   }
 
