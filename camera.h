@@ -109,7 +109,7 @@ class Camera {
     return RayF{ray_origin, ray_direction, ray_time};
   }
 
-  static constexpr float kAspectRatio = 16.f / 9.f;
+  static constexpr float kAspectRatio = 1.f; // 16.f / 9.f;
   static constexpr int kImageWidth = 400;
   static constexpr int kImageHeight = static_cast<int>(kImageWidth / kAspectRatio);
   // Count of random samples for each pixel
@@ -117,14 +117,14 @@ class Camera {
   // Color scale factor for a sum of pixel samples.
   static constexpr float kPixelSamplesScale = 1.f / kSamplesPerPixel;
   static constexpr int kMaxBounceCount = 50;
-  static constexpr float kFov = 20.f;  // Vertical view angle (field of view)
-  float defocus_angle = 0.6f;  // Variation angle of rays through each pixel
+  static constexpr float kFov = 80.f; //20.f // Vertical view angle (field of view)
+  float defocus_angle = 0.f; //0.6f // Variation angle of rays through each pixel
   float focus_dist = 10.f;  // Distance from camera lookfrom point to plane of perfect focus
  
 
   // My Vec3F class is undefined in the device code when used as constexpr and I don't
   // know why so it is not constexpr for the moment.
-  Vec3F look_from = Vec3F(13, 2, 3);  // look from.
+  Vec3F look_from = Vec3F(0, 0, 9); // Vec3F(13, 2, 3);  // look from.
 
   Vec3F look_at = Vec3F(0, 0, 0);  // Point camera is looking at
   Vec3F v_up = Vec3F(0, 1, 0);     // Camera-relative "up" direction

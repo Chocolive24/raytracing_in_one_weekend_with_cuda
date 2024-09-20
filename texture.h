@@ -4,11 +4,12 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_FAILURE_USERMSG
+#include "perlin_noise.h"
 #include "stb_image.h"
 
 struct ImageAttributes {
   int width_ = 0;
-  int height_ = 0; 
+  int height_ = 0;
   int bytes_per_pixel_ = 0;
   int bytes_per_scanline_ = 0;
 };
@@ -18,8 +19,10 @@ class ImageFileBuffer {
   explicit ImageFileBuffer(const char* const path) noexcept {
     // Loads the linear (gamma=1) image data from the given file name.
 
-    int n = bytes_per_pixel_;  // Dummy out parameter: original components per pixel
-    f_data_ = stbi_loadf(path, &image_width_, &image_height_, &n, bytes_per_pixel_);
+    int n =
+        bytes_per_pixel_;  // Dummy out parameter: original components per pixel
+    f_data_ =
+        stbi_loadf(path, &image_width_, &image_height_, &n, bytes_per_pixel_);
     if (f_data_ == nullptr) {
       std::cerr << "Couldn't load the file image at path: " << path << '\n';
       return;
@@ -48,24 +51,21 @@ class ImageFileBuffer {
   }
 
   [[nodiscard]] std::size_t size() const noexcept {
-    static auto size = image_width_ * image_height_ * 
-        bytes_per_pixel_ * sizeof(unsigned char);
+    static auto size =
+        image_width_ * image_height_ * bytes_per_pixel_ * sizeof(unsigned char);
 
     return size;
   }
 
-  [[nodiscard]] const unsigned char* GetPixelData(
-      int x, int y) const noexcept {
+  [[nodiscard]] const unsigned char* GetPixelData(int x, int y) const noexcept {
     static constexpr unsigned char magenta[] = {255, 0, 255};
-    if (b_data_ == nullptr) 
-      return magenta;
+    if (b_data_ == nullptr) return magenta;
 
     x = clamp(x, 0, image_width_);
     y = clamp(y, 0, image_height_);
 
     return b_data_ + y * bytes_per_scanline_ + x * bytes_per_pixel_;
   }
-
 
   ImageAttributes attributes{0, 0, 3, 0};
 
@@ -102,14 +102,14 @@ class ImageFileBuffer {
   }
 };
 
-
 class Texture {
-public:
+ public:
   __host__ __device__ constexpr Texture() noexcept = default;
   __host__ __device__ Texture(Texture&& other) noexcept = default;
   __host__ __device__ Texture& operator=(Texture&& other) noexcept = default;
   __host__ __device__ Texture(const Texture& other) noexcept = default;
-  __host__ __device__ Texture& operator=(const Texture& other) noexcept = default;
+  __host__ __device__ Texture& operator=(const Texture& other) noexcept =
+      default;
   __host__ __device__ virtual ~Texture() noexcept = default;
 
   __host__ __device__ [[nodiscard]] virtual Color ComputeColor(
@@ -117,11 +117,11 @@ public:
 };
 
 class SolidColor final : public Texture {
-public:
+ public:
   __host__ __device__ constexpr SolidColor(const Color& albedo) noexcept
       : albedo_(albedo) {}
   __host__ __device__ constexpr SolidColor(const float red, const float green,
-                                         const float blue)
+                                           const float blue)
       : SolidColor(Color(red, green, blue)) {}
 
   __host__ __device__ [[nodiscard]] Color ComputeColor(
@@ -129,25 +129,24 @@ public:
     return albedo_;
   }
 
-private:
+ private:
   Color albedo_{};
 };
 
 class CheckerTexture final : public Texture {
  public:
   __host__ __device__ CheckerTexture(const float scale, Texture* even,
-                                    Texture* odd)
+                                     Texture* odd)
       : inv_scale_(1.f / scale), even_(even), odd_(odd) {}
 
   __host__ __device__ CheckerTexture(float scale, const Color& c1,
-                                    const Color& c2)
+                                     const Color& c2)
       : inv_scale_(1.f / scale),
         even_(new SolidColor(c1)),
         odd_(new SolidColor(c2)) {}
 
   __host__ __device__ [[nodiscard]] Color ComputeColor(
-      float u, float v, const Vec3F& p)
-      const noexcept override {
+      float u, float v, const Vec3F& p) const noexcept override {
     const auto x_integer = static_cast<int>(std::floor(inv_scale_ * p.x));
     const auto y_integer = static_cast<int>(std::floor(inv_scale_ * p.y));
     const auto z_integer = static_cast<int>(std::floor(inv_scale_ * p.z));
@@ -163,19 +162,18 @@ class CheckerTexture final : public Texture {
   Texture* odd_ = nullptr;
 };
 
-
 class ImageTexture final : public Texture {
-public:
+ public:
   __host__ __device__ ImageTexture(unsigned char* image_data) {
-   unified_image_data_ = image_data;
+    unified_image_data_ = image_data;
     image_width_ = 1024;
     image_height_ = 512;
     bytes_per_scanline_ = 1024 * 3;
     bytes_per_pixel_ = 3;
   }
 
-  __host__ __device__ ImageTexture(unsigned char* unified_image_data, 
-      const ImageAttributes& image_attrib) {
+  __host__ __device__ ImageTexture(unsigned char* unified_image_data,
+                                   const ImageAttributes& image_attrib) {
     unified_image_data_ = unified_image_data;
     image_width_ = image_attrib.width_;
     image_height_ = image_attrib.height_;
@@ -183,9 +181,12 @@ public:
     bytes_per_pixel_ = image_attrib.bytes_per_pixel_;
   }
   __host__ __device__ ImageTexture(ImageTexture&& other) noexcept = default;
-  __host__ __device__ ImageTexture& operator=(ImageTexture&& other) noexcept = delete;
-  __host__ __device__ ImageTexture(const ImageTexture& other) noexcept = default;
-  __host__ __device__ ImageTexture& operator=(const ImageTexture& other) noexcept = delete;
+  __host__ __device__ ImageTexture& operator=(ImageTexture&& other) noexcept =
+      delete;
+  __host__ __device__ ImageTexture(const ImageTexture& other) noexcept =
+      default;
+  __host__ __device__ ImageTexture& operator=(
+      const ImageTexture& other) noexcept = delete;
   __host__ __device__ ~ImageTexture() noexcept override = default;
 
   __host__ __device__ static int clamp(int x, int low, int high) {
@@ -197,8 +198,7 @@ public:
   __host__ __device__ [[nodiscard]] Color ComputeColor(
       float u, float v, const Vec3F& p) const noexcept override {
     // If we have no texture data, then return solid cyan as a debugging aid.
-    if (image_height_ <= 0) 
-        return Color{0, 1, 1};
+    if (image_height_ <= 0) return Color{0, 1, 1};
 
     // Clamp input texture coordinates to [0,1] x [1,0]
     u = IntervalF{0, 1}.Clamp(u);
@@ -206,24 +206,22 @@ public:
 
     const auto i = static_cast<int>(u * image_width_);
     const auto j = static_cast<int>(v * image_height_);
-    //const auto pixel = image_.GetPixelData(i, j);
+    // const auto pixel = image_.GetPixelData(i, j);
 
     const unsigned char* pixel = nullptr;
 
     static constexpr unsigned char magenta[] = {255, 0, 255};
-    if (unified_image_data_ == nullptr)
-    {
+    if (unified_image_data_ == nullptr) {
       pixel = magenta;
-    }
-    else
-    {
+    } else {
       auto x = i;
       auto y = j;
 
       x = clamp(x, 0, image_width_);
       y = clamp(y, 0, image_height_);
 
-      pixel = unified_image_data_ + y * bytes_per_scanline_ + x * bytes_per_pixel_;
+      pixel =
+          unified_image_data_ + y * bytes_per_scanline_ + x * bytes_per_pixel_;
     }
 
     constexpr float color_scale = 1.f / 255.f;
@@ -231,11 +229,29 @@ public:
                  color_scale * pixel[2]};
   }
 
-private:
-  //ImageFileBuffer image_;
+ private:
+  // ImageFileBuffer image_;
   unsigned char* unified_image_data_ = nullptr;
   int image_width_ = 0;
   int image_height_ = 0;
   int bytes_per_scanline_ = 0;
   int bytes_per_pixel_ = 3;
+};
+
+class NoiseTexture final : public Texture {
+ public:
+  __host__ __device__ NoiseTexture(const float scale,
+                                   curandState* local_rand_state) noexcept
+      : noise_(local_rand_state), scale_frequency_(scale) {}
+
+  __host__ __device__ [[nodiscard]] Color ComputeColor(
+      float u, float v, const Vec3F& p) const noexcept override {
+    return Color(0.5f, 0.5f, 0.5f) *
+           (1 + std::sin(scale_frequency_ * p.z +
+                         10 * noise_.ComputeTurbulence(p, 7)));
+  }
+
+ private:
+  PerlinNoise noise_;
+  float scale_frequency_ = 0.f;
 };

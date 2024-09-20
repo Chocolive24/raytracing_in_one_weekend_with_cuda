@@ -92,6 +92,8 @@
     <ClInclude Include="interval.h" />
     <ClInclude Include="material.h" />
     <ClInclude Include="math_utility.h" />
+    <ClInclude Include="perlin_noise.h" />
+    <ClInclude Include="quad.h" />
     <ClInclude Include="ray.h" />
     <ClInclude Include="texture.h" />
     <ClInclude Include="vec3.h" />
