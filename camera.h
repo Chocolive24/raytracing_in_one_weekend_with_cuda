@@ -48,31 +48,46 @@ class Camera {
     defocus_disk_v = v * defocus_radius;
   }
 
-  __device__  [[nodiscard]] static Color CalculatePixelColor(
+  __device__  [[nodiscard]] Color CalculatePixelColor(
       const RayF& r, Hittable** world, curandState* local_rand_state) noexcept {
     RayF cur_ray = r;
     Vec3F cur_attenuation{1.f, 1.f, 1.f};
+    Color accumulated_color{0.f, 0.f, 0.f};
 
     for (int i = 0; i < kMaxBounceCount; i++) {
      
       const HitResult hit_result = (*world)->DetectHit(cur_ray, 
           IntervalF(math_utility::kEpsilon, math_utility::kInfinity));
-      
+
+      // If a hit is detected, process scattering and emission
       if (hit_result.has_hit) {
         RayF scattered{};
         Color attenuation{};
 
+        const Color color_from_emission = hit_result.material->Emitted(
+            hit_result.tex_coord.u, hit_result.tex_coord.v, hit_result.point);
+
+        // Accumulate the emission color
+        accumulated_color += cur_attenuation * color_from_emission;
+
+        // Check if the material scatters the ray
         if (hit_result.material->Scatter(cur_ray, hit_result, attenuation, scattered, 
             local_rand_state)) {
+          // Update attenuation and set the new scattered ray for the next
+          // iteration.
           cur_attenuation *= attenuation;
           cur_ray = scattered;
         }
         else {
+          // If no scattering, return accumulated emission color
+          return accumulated_color;
           return Vec3F{0.f, 0.f, 0.f};
         }
       }
       else
       {
+        // If no hit, return the background color with attenuation applied
+        return accumulated_color + cur_attenuation * background_color;
         const Vec3F unit_direction = cur_ray.direction().Normalized();
         const float a = 0.5f * (unit_direction.y + 1.f);
         const auto color =
@@ -110,23 +125,24 @@ class Camera {
   }
 
   static constexpr float kAspectRatio = 1.f; // 16.f / 9.f;
-  static constexpr int kImageWidth = 400;
+  static constexpr int kImageWidth = 600;
   static constexpr int kImageHeight = static_cast<int>(kImageWidth / kAspectRatio);
   // Count of random samples for each pixel
-  static constexpr short kSamplesPerPixel = 100;  
+  static constexpr short kSamplesPerPixel = 200;  
   // Color scale factor for a sum of pixel samples.
   static constexpr float kPixelSamplesScale = 1.f / kSamplesPerPixel;
   static constexpr int kMaxBounceCount = 50;
-  static constexpr float kFov = 80.f; //20.f // Vertical view angle (field of view)
-  float defocus_angle = 0.f; //0.6f // Variation angle of rays through each pixel
+  static constexpr float kFov = 40.f;  // Vertical view angle (field of view)
+  float defocus_angle = 0.f; // Variation angle of rays through each pixel
   float focus_dist = 10.f;  // Distance from camera lookfrom point to plane of perfect focus
- 
+
+  Color background_color{0.f, 0.f, 0.f};
 
   // My Vec3F class is undefined in the device code when used as constexpr and I don't
   // know why so it is not constexpr for the moment.
-  Vec3F look_from = Vec3F(0, 0, 9); // Vec3F(13, 2, 3);  // look from.
+  Vec3F look_from = Vec3F(278, 278, -800);  // look from.
 
-  Vec3F look_at = Vec3F(0, 0, 0);  // Point camera is looking at
+  Vec3F look_at = Vec3F(278, 278, 0);  // Point camera is looking at
   Vec3F v_up = Vec3F(0, 1, 0);     // Camera-relative "up" direction
 
   Vec3F u{};

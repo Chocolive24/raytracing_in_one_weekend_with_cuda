@@ -68,7 +68,7 @@ __global__ void Render(Vec3F* fb, Camera** camera, Hittable** world,
   for (int s = 0; s < Camera::kSamplesPerPixel; s++) {
 
     const RayF r((*camera)->GetRayAtLocation(i, j, &local_rand_state));
-    col += Camera::CalculatePixelColor(r, world, &local_rand_state);
+    col += (*camera)->CalculatePixelColor(r, world, &local_rand_state);
   }
 
   rand_state[pixel_index] = local_rand_state;
@@ -208,6 +208,59 @@ __global__ void QuadScene(Camera** d_camera, Hittable** d_list,
   }
 }
 
+__global__ void SimpleLightScene(Camera** d_camera, Hittable** d_list,
+                            Hittable** d_world, curandState* rand_state) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curandState local_rand_state = *rand_state;
+
+    *rand_state = local_rand_state;
+
+    const auto pertext = new NoiseTexture(4, rand_state);
+    d_list[0] = new Sphere(Vec3F(0, -1000, 0), 1000, new Lambertian(pertext));
+    d_list[1] = new Sphere(Vec3F(0, 2, 0), 2, new Lambertian(pertext));
+
+    const auto difflight = new DiffuseLight(new SolidColor(4, 4, 4));
+   d_list[2] = new Sphere(Vec3F(0, 7, 0), 2, difflight);
+    d_list[3] = new Quad(Vec3F(3, 1, -2), Vec3F(2, 0, 0), Vec3F(0, 2, 0),
+                                difflight);
+
+    *d_world = new HittableList(d_list, 4);
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
+__global__ void SimpleCornellBox(Camera** d_camera, Hittable** d_list,
+                            Hittable** d_world, curandState* rand_state) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    curandState local_rand_state = *rand_state;
+
+    *rand_state = local_rand_state;
+
+    const auto red = new Lambertian(new SolidColor(.65f, .05f, .05f));
+    const auto white = new Lambertian(new SolidColor(.73f, .73f, .73f));
+    const auto green = new Lambertian(new SolidColor(.12f, .45f, .15f));
+    const auto light = new DiffuseLight(new SolidColor(15, 15, 15));
+
+    d_list[0] = new Quad(Vec3F(555, 0, 0), Vec3F(0, 555, 0),
+                                Vec3F(0, 0, 555), green);
+    d_list[1] = new Quad(Vec3F(0, 0, 0), Vec3F(0, 555, 0),
+                                Vec3F(0, 0, 555), red);
+    d_list[2] = new Quad(Vec3F(343, 554, 332), Vec3F(-130, 0, 0),
+                                Vec3F(0, 0, -105), light);
+    d_list[3] = new Quad(Vec3F(0, 0, 0), Vec3F(555, 0, 0),
+                                Vec3F(0, 0, 555), white);
+    d_list[4] = new Quad(Vec3F(555, 555, 555), Vec3F(-555, 0, 0),
+                                Vec3F(0, 0, -555), white);
+    d_list[5] = new Quad(Vec3F(0, 0, 555), Vec3F(555, 0, 0),
+                                Vec3F(0, 555, 0), white);
+
+    *d_world = new HittableList(d_list, 6);
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
 __global__ void FreeWorld(Camera** d_camera, Hittable** d_list, Hittable** d_world) {
   if (threadIdx.x == 0 && blockIdx.x == 0) {
     if (*d_camera)
@@ -267,7 +320,7 @@ int main() {
   CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_bvh_node),
                                       sizeof(Hittable*)));
 
-  switch(5)
+  switch(7)
   {
     case 1:
       BouncingSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
@@ -309,6 +362,14 @@ int main() {
     }
     case 5: {
       QuadScene<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
+      break;
+    }
+    case 6: {
+      SimpleLightScene<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
+      break;
+    }
+    case 7: {
+      SimpleCornellBox<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
       break;
     }
     default:

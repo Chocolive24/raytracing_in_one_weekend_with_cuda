@@ -18,6 +18,10 @@ class Material {
   __device__ virtual bool Scatter(const RayF& r_in, const HitResult& hit,
                                   Color& attenuation, RayF& scattered,
                                   curandState* local_rand_state) const = 0;
+
+  __device__ virtual Color Emitted(float u, float v, const Vec3F& p) const noexcept {
+    return Color(0, 0, 0);
+  }
 };
 
 class Lambertian final : public Material {
@@ -114,4 +118,22 @@ class Dielectric final : public Material {
   // Refractive index in vacuum or air, or the ratio of the material's
   // refractive index over the refractive index of the enclosing media
   float refraction_index_ = 1.f;
+};
+
+class DiffuseLight final : public Material {
+ public:
+  __device__ DiffuseLight(Texture* tex) noexcept : tex_(tex) {}
+  __device__ DiffuseLight(SolidColor* emit) noexcept : tex_(emit) {}
+
+  __device__ bool Scatter(const RayF& r_in, const HitResult& hit, Color& attenuation, RayF& scattered,
+    curandState* local_rand_state) const override {
+    return false;
+  }
+
+  __device__ Color Emitted(const float u, const float v, const Vec3F& p) const noexcept override {
+    return tex_->ComputeColor(u, v, p);
+  }
+
+private:
+  Texture* tex_ = nullptr;
 };
