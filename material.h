@@ -137,3 +137,19 @@ class DiffuseLight final : public Material {
 private:
   Texture* tex_ = nullptr;
 };
+
+class Isotropic final : public Material {
+ public:
+  __host__ __device__ Isotropic(SolidColor* albedo) : tex_(albedo) {}
+  __host__ __device__ Isotropic(Texture* tex) : tex_(tex) {}
+
+  __device__ bool Scatter(const RayF& r_in, const HitResult& hit, Color& attenuation, RayF& scattered,
+    curandState* local_rand_state) const override {
+    scattered = RayF(hit.point, GetRandomUnitVector(local_rand_state), r_in.time());
+    attenuation = tex_->ComputeColor(hit.tex_coord.u, hit.tex_coord.v, hit.point);
+    return true;
+  }
+
+private:
+  Texture* tex_ = nullptr;
+};

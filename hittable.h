@@ -11,13 +11,13 @@ struct TextureCoord {
   float v = 0;
 };
 
-class HitResult {
+class alignas(16) HitResult {
  public:
   Vec3F point{};
   Vec3F normal{};
   Material* material = nullptr;
-  float t = 0;
   TextureCoord tex_coord{};
+  float t = 0;
   bool has_hit = false;
   bool front_face;
 
@@ -109,7 +109,7 @@ class Sphere final : public Hittable {
           return hit_result;
         }
       }
-
+      
       hit_result.t = root;
       hit_result.point = r.GetPointAt(hit_result.t);
       const Vec3F outward_normal = (hit_result.point - current_center) / radius_;
@@ -117,7 +117,6 @@ class Sphere final : public Hittable {
       hit_result.tex_coord = ComputeSphereUv(outward_normal);
       hit_result.has_hit = true;
       hit_result.material = material;
-
       return hit_result;
     }
 
@@ -161,4 +160,126 @@ class Sphere final : public Hittable {
 
 public:
   Material* material = nullptr;
+};
+
+class Translate final : public Hittable {
+ public:
+  __host__ __device__ Translate(Hittable* object, const Vec3F& offset)
+      : object_(object), offset_(offset) {
+    aabb_ = object->GetBoundingBox() + offset;
+  }
+
+  __device__ [[nodiscard]] HitResult DetectHit(const RayF& r, const IntervalF& ray_interval) const noexcept override {
+    HitResult hit_result{};
+    // Move the ray backwards by the offset
+    const RayF offset_r(r.origin() - offset_, r.direction(), r.time());
+
+    // Determine whether an intersection exists along the offset ray (and if so,
+    // where)
+    hit_result = object_->DetectHit(offset_r, ray_interval);
+    if (!hit_result.has_hit) 
+      return hit_result;
+
+    // Move the intersection point forwards by the offset
+    hit_result.point += offset_;
+
+    return hit_result;
+  }
+
+  __host__ __device__ [[nodiscard]] AABB GetBoundingBox() const noexcept override {
+    return aabb_;
+  }
+
+private:
+  Hittable* object_ = nullptr;
+  Vec3F offset_{};
+  AABB aabb_{};
+};
+
+class RotateY final : public Hittable {
+ public:
+  __host__ __device__ RotateY(Hittable* object, float angle) : object_(object) {
+    const auto radians = math_utility::DegreesToRadians(angle);
+    sin_theta = std::sin(radians);
+    cos_theta = std::cos(radians);
+    aabb_ = object->GetBoundingBox();
+
+    Vec3F min(math_utility::kInfinity, math_utility::kInfinity,
+              math_utility::kInfinity);
+    Vec3F max(-math_utility::kInfinity, -math_utility::kInfinity,
+              -math_utility::kInfinity);
+
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        for (int k = 0; k < 2; k++) {
+          const auto x = i * aabb_.x.max + (1 - i) * aabb_.x.min;
+          const auto y = j * aabb_.y.max + (1 - j) * aabb_.y.min;
+          const auto z = k * aabb_.z.max + (1 - k) * aabb_.z.min;
+
+          const auto newx = cos_theta * x + sin_theta * z;
+          const auto newz = -sin_theta * x + cos_theta * z;
+
+          Vec3F tester(newx, y, newz);
+
+          for (int c = 0; c < 3; c++) {
+            min[c] = std::fmin(min[c], tester[c]);
+            max[c] = std::fmax(max[c], tester[c]);
+          }
+        }
+      }
+    }
+
+    aabb_ = AABB(min, max);
+  }
+
+  __device__ [[nodiscard]] HitResult DetectHit(const RayF& r, const IntervalF& ray_interval) const noexcept override {
+    // Transform the ray from world space to object space.
+
+    HitResult hit_result{};
+
+    const auto origin =
+        Vec3F((cos_theta * r.origin().x) - (sin_theta * r.origin().z),
+               r.origin().y,
+               (sin_theta * r.origin().x) + (cos_theta * r.origin().z));
+
+    const auto direction =
+        Vec3F((cos_theta * r.direction().x) - (sin_theta * r.direction().z),
+             r.direction().y,
+             (sin_theta * r.direction().x) + (cos_theta * r.direction().z));
+
+    RayF rotated_r(origin, direction, r.time());
+
+    // Determine whether an intersection exists in object space (and if so,
+    // where).
+
+    hit_result = object_->DetectHit(rotated_r, ray_interval);
+
+    if (!hit_result.has_hit) 
+      return hit_result;
+
+    // Transform the intersection from object space back to world space.
+
+    hit_result.point =
+        Vec3F((cos_theta * hit_result.point.x) + (sin_theta * hit_result.point.z),
+        hit_result.point.y,
+        (-sin_theta * hit_result.point.x) + (cos_theta * hit_result.point.z));
+
+    hit_result.normal = Vec3F(
+        (cos_theta * hit_result.normal.x) + (sin_theta * hit_result.normal.z),
+        hit_result.normal.y,
+        (-sin_theta * hit_result.normal.x) +
+            (cos_theta * hit_result.normal.z));
+
+    return hit_result;
+  }
+
+  __host__ __device__ [[nodiscard]] AABB GetBoundingBox() const noexcept override {
+    return aabb_;
+  }
+
+private:
+  Hittable* object_ = nullptr;
+  float sin_theta = 0.f;
+  float cos_theta = 0.f;
+  AABB aabb_{};
 };

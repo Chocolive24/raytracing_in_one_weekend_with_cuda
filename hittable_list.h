@@ -31,7 +31,6 @@ class HittableList final : public Hittable {
       const RayF& r, const IntervalF& ray_interval) const noexcept override {
     HitResult result{};
     auto closest_so_far = ray_interval.max;
-
     for (int i = 0; i < object_count_; i++) {
       const auto object = objects_[i];
       const HitResult temp_result =

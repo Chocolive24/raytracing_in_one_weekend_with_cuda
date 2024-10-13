@@ -10,7 +10,7 @@ class PerlinNoise {
   __device__ PerlinNoise(curandState* local_rand_state) noexcept {
     for (Vec3F& rand_vec : rand_vecs_) {
       // Transform random value in range [0 ; 1] to range [-1 ; 1].
-      auto vec = 2.0f * GetRandomVector(local_rand_state) - Vec3F(1, 1, 1);
+      auto vec = 2.0f * GetRandomUnitVector(local_rand_state) - Vec3F(1, 1, 1);
       rand_vec = vec.Normalized();
     }
 

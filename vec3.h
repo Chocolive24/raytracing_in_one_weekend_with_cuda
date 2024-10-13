@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 #include <ostream>
 #include <crt/host_defines.h>
@@ -123,6 +124,21 @@ public:
     // Return true if the vector is close to zero in all dimensions.
     constexpr float s = 1e-8f;
     return (std::fabs(x) < s) && (std::fabs(y) < s) && (std::fabs(z) < s);
+  }
+
+  __host__ __device__ [[nodiscard]] T& operator[](const int idx) noexcept {
+    assert(idx >= 0 && idx < 3 && "Index out of bounds");
+
+    switch (idx) {
+      case 0:
+        return x;
+      case 1:
+        return y;
+      case 2:
+        return z;
+      default:
+        return x;  // Should never hit this point
+    }
   }
 
   T x = 0;

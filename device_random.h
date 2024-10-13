@@ -17,7 +17,12 @@ __device__ [[nodiscard]] inline int GetRandomInt(
   return static_cast<int>(curand_uniform(local_rand_state) * (max + 1));
 }
 
-__device__ [[nodiscard]] inline Vec3F GetRandomVector(
+__device__ [[nodiscard]] inline float GetRandomFloat(
+    curandState* local_rand_state) noexcept {
+  return curand_uniform(local_rand_state);
+}
+
+__device__ [[nodiscard]] inline Vec3F GetRandomUnitVector(
     curandState* local_rand_state) noexcept {
   return Vec3F{curand_uniform(local_rand_state),
                curand_uniform(local_rand_state),
@@ -29,7 +34,7 @@ __device__ [[nodiscard]] inline Vec3F GetRandVecInUnitSphere(
   Vec3F p{};
   do {
     // Transform random value in range [0 ; 1] to range [-1 ; 1].
-    p = 2.0f * GetRandomVector(local_rand_state) - Vec3F(1, 1, 1);
+    p = 2.0f * GetRandomUnitVector(local_rand_state) - Vec3F(1, 1, 1);
   } while (p.LengthSquared() >= 1.0f);
   return p;
 }

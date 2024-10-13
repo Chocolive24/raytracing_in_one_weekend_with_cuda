@@ -80,3 +80,11 @@ public:
     return true;
   }
 };
+
+__host__ __device__ inline AABB operator+(const AABB& bbox, const Vec3F& offset) {
+  return AABB(bbox.x + offset.x, bbox.y + offset.y, bbox.z + offset.z);
+}
+
+__host__ __device__ inline AABB operator+(const Vec3F& offset, const AABB& bbox) {
+  return bbox + offset;
+}

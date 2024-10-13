@@ -48,8 +48,19 @@ class Interval {
     return Interval(min - padding, max + padding);
   }
 
+
+
   T min = +math_utility::kInfinity;
   T max = -math_utility::kInfinity;
 };
 
 using IntervalF = Interval<float>;
+
+__host__ __device__ inline IntervalF operator+(const IntervalF& ival, float displacement) {
+  return IntervalF(ival.min + displacement, ival.max + displacement);
+}
+
+__host__ __device__ inline IntervalF operator+(float displacement,
+                                               const IntervalF& ival) {
+  return ival + displacement;
+}
