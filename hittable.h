@@ -117,6 +117,7 @@ class Sphere final : public Hittable {
       hit_result.tex_coord = ComputeSphereUv(outward_normal);
       hit_result.has_hit = true;
       hit_result.material = material;
+     
       return hit_result;
     }
 

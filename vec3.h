@@ -22,6 +22,20 @@ public:
         y(y),
         z(z) {}
 
+  __host__ __device__ [[nodiscard]] constexpr T operator[](
+      const int idx) const noexcept {
+    switch (idx) {
+      case 0:
+        return x;
+      case 1:
+        return y;
+      case 2:
+        return z;
+      default:
+        return T(0);  
+    }
+  }
+
   __host__ __device__ [[nodiscard]] constexpr Vec3<T> operator-()
       const noexcept {
     return Vec3<T>(-x, -y, -z);

@@ -37,48 +37,51 @@ public:
     return x;
   }
 
-  __device__ [[nodiscard]] bool Hit(const RayF& r,
-                                             IntervalF ray_t) const noexcept {
-    const Vec3F& ray_orig = r.origin();
-    const Vec3F& ray_dir = r.direction();
-
-    float axis_it = 0; // Iterator variable to iterate threw all 3D axis.
+  __device__ [[nodiscard]] bool Hit(const RayF& r, IntervalF ray_t) const noexcept {
+    const Vec3F ray_orig = r.origin();
+    const Vec3F ray_dir = r.direction();
 
     for (int axis = 0; axis < 3; axis++) {
       const IntervalF& ax = AxisInterval(axis);
+      const float adinv = 1.f / ray_dir[axis];
 
-      switch (axis)
-      {
-        case 0:
-          axis_it = ray_dir.x;
-          break;
-        case 1:
-          axis_it = ray_dir.y;
-          break;
-        case 2:
-          axis_it = ray_dir.z;
-          break;
-      default:
-          break;
-      }
-
-      const float adinv = 1.f / axis_it;
-
-      const auto t0 = (ax.min - axis_it) * adinv;
-      const auto t1 = (ax.max - axis_it) * adinv;
+      const auto t0 = (ax.min - ray_orig[axis]) * adinv;
+      const auto t1 = (ax.max - ray_orig[axis]) * adinv;
 
       if (t0 < t1) {
         if (t0 > ray_t.min) ray_t.min = t0;
         if (t1 < ray_t.max) ray_t.max = t1;
-      } else {
+      }
+      else {
         if (t1 > ray_t.min) ray_t.min = t1;
         if (t0 < ray_t.max) ray_t.max = t0;
       }
 
-      if (ray_t.max <= ray_t.min) return false;
+      if (ray_t.max <= ray_t.min) 
+          return false;
     }
+
     return true;
   }
+
+  __device__ [[nodiscard]] int LongestAxis() const noexcept {
+    // Returns the index of the longest axis of the bounding box.
+
+    if (x.Size() > y.Size())
+      return x.Size() > z.Size() ? 0 : 2;
+    else
+      return y.Size() > z.Size() ? 1 : 2;
+  }
+
+  __device__ static AABB empty(){
+    return AABB(IntervalF::empty(), IntervalF::empty(), IntervalF::empty());
+  }
+
+  __device__ static AABB universe() {
+    return AABB(IntervalF::universe(), IntervalF::universe(),
+                IntervalF::universe());
+  }
+
 };
 
 __host__ __device__ inline AABB operator+(const AABB& bbox, const Vec3F& offset) {

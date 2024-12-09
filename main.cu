@@ -3,6 +3,9 @@
 #include "hittable.h"
 #include "hittable_list.h"
 #include "ray.h"
+#include "constant_medium.h"
+#include "quad.h"
+#include "bvh.h"
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -10,9 +13,6 @@
 
 #include <ctime>
 #include <iostream>
-
-#include "constant_medium.h"
-#include "quad.h"
 
 #define CHECK_CUDA_ERRORS(val) check_cuda((val), #val, __FILE__, __LINE__)
 
@@ -425,7 +425,73 @@ __global__ void FinalScene(Camera** d_camera, Hittable** d_list,
         make_shared<rotate_y>(make_shared<bvh_node>(boxes2), 15),
         vec3(-100, 270, 395)));*/
 
-    *d_world = new HittableList(d_list, object_idx - 1);
+    //*d_world = new HittableList(d_list, object_idx - 1);
+    *d_world = new BVH_Node(d_list, 0, object_idx - 1, rand_state, 0);
+    *d_camera = new Camera();
+    (*d_camera)->Initialize();
+  }
+}
+
+__global__ void BVH_Scene(Camera** d_camera, Hittable** d_list,
+                          Hittable** d_world, curandState* rand_state, Hittable** d_bvh_node) {
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    //curandState local_rand_state = *rand_state;
+
+    //*rand_state = local_rand_state;
+
+    //auto pertext = new NoiseTexture(4, rand_state);
+    //d_list[0] = new Sphere(Vec3F(0, -1000, 0), 1000, new Lambertian(pertext));
+    //d_list[1] = new Sphere(Vec3F(0, 2, 0), 2, new Lambertian(pertext));
+
+    //*d_world = new BVH_Node(d_list, 0, 2, rand_state); // Doesn't work
+
+    ////*d_world = new HittableList(d_list, 1); // Work fine
+    //*d_camera = new Camera();
+    //(*d_camera)->Initialize();
+
+    curandState local_rand_state = *rand_state;
+    *rand_state = local_rand_state;
+
+    d_list[0] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
+                        new Lambertian(new SolidColor(0.5, 0.5, 0.5)));
+
+    int i = 1;
+    for (int a = -kXVal; a < kXVal; a++) {
+      for (int b = -kYVal; b < kYVal; b++) {
+        const float choose_mat = RANDOM;
+        const Vec3F center(a + RANDOM, 0.2f, b + RANDOM);
+
+        if (choose_mat < 0.8f) {
+          auto albedo = GetRandomUnitVector(&local_rand_state) *
+                        GetRandomUnitVector(&local_rand_state);
+          const auto center2 = center + Vec3F(0, RANDOM * 0.5f, 0.f);
+          d_list[i++] = new Sphere(center, center2, 0.2f,
+                                   new Lambertian(new SolidColor(albedo)));
+        } else if (choose_mat < 0.95f) {
+          d_list[i++] = new Sphere(
+              center, 0.2f,
+              new Metal(Vec3F(0.5f * (1.0f + RANDOM), 0.5f * (1.0f + RANDOM),
+                              0.5f * (1.0f + RANDOM)),
+                        0.5f * RANDOM));
+        } else {
+          d_list[i++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
+        }
+      }
+    }
+
+    d_list[i++] = new Sphere(Vec3F(0, 1, 0), 1.0, new Dielectric(1.5f));
+    d_list[i++] = new Sphere(Vec3F(-4, 1, 0), 1.0,
+                     new Lambertian(new SolidColor(0.4f, 0.2f, 0.1f)));
+    d_list[i++] = new Sphere(Vec3F(4, 1, 0), 1.0,
+                             new Metal(Color(0.7f, 0.6f, 0.5f), 0.0));
+
+   /* d_list[i++] = new Sphere(Vec3F(0, -1000.0, -1), 1000,
+                           new Lambertian(new SolidColor(0.5, 0.5, 0.5)));*/
+    *rand_state = local_rand_state;
+
+    *d_world = new BVH_Node(d_list, 0, kObjectCount, rand_state);
+    //*d_world = new HittableList(d_list, kObjectCount - 1);
+
     *d_camera = new Camera();
     (*d_camera)->Initialize();
   }
@@ -454,6 +520,7 @@ __global__ void FreeWorld(Camera** d_camera, Hittable** d_list, Hittable** d_wor
 
 int main() {
   //cudaDeviceSetLimit(cudaLimitStackSize, 65536);
+  cudaDeviceSetLimit(cudaLimitStackSize, 2048);
 
   // FrameBuffer
   constexpr int kNumPixels = Camera::kImageWidth * Camera::kImageHeight;
@@ -490,9 +557,9 @@ int main() {
 
   Hittable** d_bvh_node;
   CHECK_CUDA_ERRORS(cudaMallocManaged(reinterpret_cast<void**>(&d_bvh_node),
-                                      sizeof(Hittable*)));
+                                      kObjectCount * sizeof(Hittable*)));
 
-  switch(9)
+  switch(10)
   {
     case 1:
       BouncingSpheres<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2);
@@ -572,6 +639,10 @@ int main() {
                                           sizeof(ImageTexture*)));
 
       FinalScene<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_image_data, d_img_attrib, d_texture);
+      break;
+    }
+  case 10: {
+      BVH_Scene<<<1, 1>>>(d_camera, d_list, d_world, d_rand_state2, d_bvh_node);
       break;
     }
     default:

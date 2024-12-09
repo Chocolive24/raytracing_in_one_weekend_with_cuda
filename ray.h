@@ -19,8 +19,8 @@ class Ray {
   __device__ Ray(const Vec3<T>& origin, const Vec3<T>& direction, T time = 0.f)
       : origin_(origin), direction_(direction), time_(time) {}
 
-  __device__ [[nodiscard]] const Vec3<T>& origin() const noexcept { return origin_; }
-  __device__ [[nodiscard]] const Vec3<T>& direction() const noexcept { return direction_; }
+  __device__ [[nodiscard]] Vec3<T> origin() const noexcept { return origin_; }
+  __device__ [[nodiscard]] Vec3<T> direction() const noexcept { return direction_; }
   __device__ [[nodiscard]] T time() const noexcept { return time_; }
   
   __host__ __device__ [[nodiscard]] Vec3<T> GetPointAt(const T& t) const {
