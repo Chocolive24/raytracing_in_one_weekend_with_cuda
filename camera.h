@@ -10,6 +10,14 @@ class Camera {
   __host__ __device__ constexpr Camera() noexcept = default;
 
   __host__ __device__ void Initialize() noexcept {
+
+    // Use of sqrtf because std::sqrt is not available in device code.
+    sqrt_spp = static_cast<short>(sqrtf(kSamplesPerPixel));
+
+    // Color scale factor for a sum of pixel samples.
+    kPixelSamplesScale = 1.f / (sqrt_spp * sqrt_spp);
+    recip_sqrt_spp = 1.f / sqrt_spp;
+
     // Determine viewport dimensions.
     constexpr auto theta = math_utility::DegreesToRadians(kFov);
     const auto h = std::tan(theta / 2);
@@ -109,12 +117,27 @@ class Camera {
     return look_from + (p.x * defocus_disk_u) + (p.y * defocus_disk_v);
   }
 
+  __device__ Vec3F SampleSquareStratified(
+      int s_i, int s_j, curandState* local_rand_state) const noexcept {
+    // Returns the vector to a random point in the square sub-pixel specified by
+    // grid indices s_i and s_j, for an idealized unit square pixel [-.5,-.5] to
+    // [+.5,+.5].
+
+    const float px = ((s_i + GetRandomFloat(local_rand_state)) * recip_sqrt_spp) - 0.5f;
+    const float py = ((s_j + GetRandomFloat(local_rand_state)) * recip_sqrt_spp) - 0.5f;
+
+    return Vec3F{px, py, 0};
+  }
+
   __device__ [[nodiscard]] RayF GetRayAtLocation(
-      const int x, const int y, curandState* local_rand_state) const noexcept {
+      const int x, const int y, int s_i, int s_j, curandState* local_rand_state) const noexcept {
     // Construct a camera ray originating from the defocus disk and directed at
     // a randomly sampled point around the pixel location i, j.
-    const auto offset = Vec3F(curand_uniform(local_rand_state) - 0.5f,
-                              curand_uniform(local_rand_state) - 0.5f, 0.f);
+
+
+    const auto offset = SampleSquareStratified(s_i, s_j, local_rand_state);
+    /*const auto offset = Vec3F(curand_uniform(local_rand_state) - 0.5f,
+                              curand_uniform(local_rand_state) - 0.5f, 0.f);*/
     const auto pixel_sample = pixel_00_loc +
                               ((x + offset.x) * pixel_delta_u) +
                               ((y + offset.y) * pixel_delta_v);
@@ -127,25 +150,28 @@ class Camera {
     return RayF{ray_origin, ray_direction, ray_time};
   }
 
-  static constexpr float kAspectRatio = 16.f / 9.f;
-  static constexpr int kImageWidth = 400;
+  static constexpr float kAspectRatio = 1.f;  // 16.f / 9.f;
+  static constexpr int kImageWidth = 600;
   static constexpr int kImageHeight = static_cast<int>(kImageWidth / kAspectRatio);
   // Count of random samples for each pixel
-  static constexpr short kSamplesPerPixel = 100;  
+  static constexpr short kSamplesPerPixel = 64;
+  short sqrt_spp = 0;
   // Color scale factor for a sum of pixel samples.
-  static constexpr float kPixelSamplesScale = 1.f / kSamplesPerPixel;
-  static constexpr int kMaxBounceCount = 50; //40
-  static constexpr float kFov = 20.f;  // Vertical view angle (field of view)
-  float defocus_angle = 0.6f; // Variation angle of rays through each pixel
+  float kPixelSamplesScale = 0.f;
+  float recip_sqrt_spp = 0.f;
+
+  static constexpr int kMaxBounceCount = 40; //40
+  static constexpr float kFov = 40.f;  // Vertical view angle (field of view)
+  float defocus_angle = 0.f; // Variation angle of rays through each pixel
   float focus_dist = 10.f;  // Distance from camera lookfrom point to plane of perfect focus
 
-  Color background_color{0.7f, 0.8f, 1.f};
+  Color background_color{0, 0, 0};
 
   // My Vec3F class is undefined in the device code when used as constexpr and I don't
   // know why so it is not constexpr for the moment.
-  Vec3F look_from = Vec3F(13, 2, 3);  // look from.
+  Vec3F look_from = Vec3F(278, 278, -800);  // look from.
 
-  Vec3F look_at = Vec3F(0, 0, 0);  // Point camera is looking at
+  Vec3F look_at = Vec3F(278, 278, 0);  // Point camera is looking at
   Vec3F v_up = Vec3F(0, 1, 0);     // Camera-relative "up" direction
 
   Vec3F u{};
